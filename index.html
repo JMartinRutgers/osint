@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Global Breaking News Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:wght@300;400;600&display=swap');
+
+  :root {
+    --bg: #0a0a0b;
+    --bg2: #111113;
+    --bg3: #18181c;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #f0ede8;
+    --text2: #8a8780;
+    --text3: #555350;
+    --red: #e8412a;
+    --red2: #ff6b50;
+    --amber: #e8a21a;
+    --blue: #3d8bff;
+    --green: #2dbd7e;
+    --purple: #9b6dff;
+    --teal: #1eb8a8;
+    --pink: #e05a8a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Source Serif 4', Georgia, serif;
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* ALERT BAR */
+  #alert-bar {
+    display: none;
+    background: var(--red);
+    color: #fff;
+    padding: 9px 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    animation: pulse-bg 2s ease-in-out infinite;
+  }
+  @keyframes pulse-bg {
+    0%,100% { background: var(--red); }
+    50% { background: #c8351f; }
+  }
+  .live-badge {
+    background: rgba(255,255,255,0.25);
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    animation: blink 1.2s step-end infinite;
+  }
+  @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0.4 } }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid var(--border2);
+    background: var(--bg);
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .header-left h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .header-left h1 span { color: var(--red2); }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  #updated-time {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text3);
+  }
+  button {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 7px 14px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    display: flex; align-items: center; gap: 6px;
+    transition: all 0.15s;
+  }
+  button:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  #ai-btn { border-color: rgba(61,139,255,0.4); color: var(--blue); }
+  #ai-btn:hover { background: rgba(61,139,255,0.1); }
+
+  /* LOADING */
+  #loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    gap: 20px;
+  }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--red2);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading-msg {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--text3);
+    letter-spacing: 0.06em;
+  }
+
+  /* MAIN */
+  #main { display: none; max-width: 1320px; margin: 0 auto; padding: 24px 28px; }
+
+  /* AI BRIEF */
+  #ai-brief-box {
+    display: none;
+    background: var(--bg2);
+    border: 1px solid rgba(61,139,255,0.3);
+    border-left: 3px solid var(--blue);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+  }
+  #ai-brief-box .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--blue);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  #ai-brief-text { font-size: 14px; line-height: 1.7; color: var(--text2); }
+
+  /* STATS */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .stat-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .stat-val {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  /* CHARTS */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .chart-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px 20px;
+  }
+  .chart-card .clabel {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .legend-item {
+    display: flex; align-items: center; gap: 5px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; color: var(--text2);
+  }
+  .legend-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+  .chart-wrap { position: relative; }
+
+  /* SOURCES */
+  .sources-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 20px;
+    margin-bottom: 20px;
+  }
+  .sources-card .clabel {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .sources-row { display: flex; flex-wrap: wrap; gap: 7px; }
+  .src-pill {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    display: flex; align-items: center; gap: 5px;
+    border: 1px solid;
+  }
+  .src-ok { background: rgba(45,189,126,0.1); color: #2dbd7e; border-color: rgba(45,189,126,0.3); }
+  .src-err { background: rgba(232,65,42,0.1); color: var(--red2); border-color: rgba(232,65,42,0.3); }
+  .src-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+  /* FILTERS */
+  .filter-row { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+  .filter-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+  .filter-btn.active { background: rgba(232,65,42,0.15); border-color: rgba(232,65,42,0.5); color: var(--red2); }
+
+  /* NEWS COUNT */
+  #news-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text3);
+    margin-bottom: 14px;
+    letter-spacing: 0.04em;
+  }
+
+  /* NEWS ITEMS */
+  .news-item {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    transition: border-color 0.15s;
+  }
+  .news-item:hover { border-color: var(--border2); }
+  .news-left { flex-shrink: 0; padding-top: 2px; }
+  .news-badge {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    padding: 3px 7px;
+    border-radius: 3px;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .badge-high { background: rgba(232,65,42,0.15); color: var(--red2); border-color: rgba(232,65,42,0.4); }
+  .badge-medium { background: rgba(232,162,26,0.15); color: var(--amber); border-color: rgba(232,162,26,0.4); }
+  .badge-low { background: rgba(61,139,255,0.1); color: var(--blue); border-color: rgba(61,139,255,0.3); }
+  .news-right { flex: 1; min-width: 0; }
+  .news-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--text);
+    text-decoration: none;
+    display: block;
+    margin-bottom: 6px;
+    line-height: 1.45;
+    transition: color 0.15s;
+  }
+  .news-title:hover { color: var(--red2); }
+  .news-desc {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.55;
+    margin-bottom: 8px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .news-meta {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text3);
+  }
+  .news-source { color: var(--text2); }
+  .topic-pill {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid;
+    letter-spacing: 0.03em;
+    transition: opacity 0.15s;
+  }
+  .topic-pill:hover { opacity: 0.75; }
+
+  /* EMPTY */
+  .empty { text-align: center; padding: 50px 20px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+
+  /* ERROR BANNER */
+  #error-bar {
+    display: none;
+    background: rgba(232,65,42,0.1);
+    border: 1px solid rgba(232,65,42,0.3);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--red2);
+  }
+
+  @media (max-width: 900px) {
+    .charts-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(3,1fr); }
+  }
+  @media (max-width: 600px) {
+    header { padding: 0 16px; height: auto; padding-top: 12px; padding-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+    #main { padding: 16px; }
+    .stats-grid { grid-template-columns: repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div id="alert-bar" onclick="this.style.display='none'">
+  <span class="live-badge">● LIVE</span>
+  <span id="alert-text" style="flex:1"></span>
+  <span style="font-size:16px;opacity:.7">✕</span>
+</div>
+
+<header>
+  <div class="header-left">
+    <div class="eyebrow">Global Intelligence Feed</div>
+    <h1>Breaking <span>News</span> Dashboard</h1>
+  </div>
+  <div class="header-right">
+    <span id="updated-time"></span>
+    <button id="refresh-btn" onclick="loadNews()">↻ Refresh</button>
+    <button id="ai-btn" onclick="getAIBrief()">⚡ AI Brief</button>
+  </div>
+</header>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div id="loading-msg">Connecting to global newsrooms...</div>
+</div>
+
+<div id="main">
+  <div id="error-bar"></div>
+  <div id="ai-brief-box">
+    <div class="label">AI Intelligence Brief</div>
+    <div id="ai-brief-text"></div>
+  </div>
+
+  <div class="stats-grid" id="stats-grid"></div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="clabel">Trending Topics</div>
+      <div class="legend" id="topic-legend"></div>
+      <div class="chart-wrap" id="topic-wrap">
+        <canvas id="topicChart" role="img" aria-label="Horizontal bar chart of trending news topics by headline count"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="clabel">Coverage by Region</div>
+      <div class="legend" id="region-legend"></div>
+      <div class="chart-wrap" id="region-wrap">
+        <canvas id="regionChart" role="img" aria-label="Horizontal bar chart of news stories by world region"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="sources-card">
+    <div class="clabel">Live Feed Sources</div>
+    <div class="sources-row" id="source-row"></div>
+  </div>
+
+  <div class="filter-row" id="filter-row"></div>
+  <div id="news-count"></div>
+  <div id="news-list"></div>
+</div>
+
+<script>
+const PROXIES = [
+  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+];
+
+const FEEDS = [
+  {url:'https://feeds.bbci.co.uk/news/world/rss.xml', source:'BBC World', region:'UK'},
+  {url:'https://feeds.bbci.co.uk/news/rss.xml', source:'BBC', region:'UK'},
+  {url:'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml', source:'NYT', region:'US'},
+  {url:'https://feeds.npr.org/1001/rss.xml', source:'NPR', region:'US'},
+  {url:'https://www.aljazeera.com/xml/rss/all.xml', source:'Al Jazeera', region:'Global'},
+  {url:'https://rss.dw.com/rdf/rss-en-all', source:'DW', region:'EU'},
+  {url:'https://www.cbc.ca/cmlink/rss-topstories', source:'CBC', region:'CA'},
+  {url:'https://www.abc.net.au/news/feed/51120/rss.xml', source:'ABC AU', region:'AU'},
+  {url:'https://timesofindia.indiatimes.com/rssfeedstopstories.cms', source:'Times of India', region:'IN'},
+];
+
+const TOPICS = [
+  {name:'Ukraine & Russia', rx:/\b(ukraine|russia|zelensky|putin|nato|kyiv|kremlin|moscow)\b/gi, color:'#e8412a'},
+  {name:'Middle East',      rx:/\b(israel|gaza|hamas|west bank|netanyahu|lebanon|hezbollah|iran)\b/gi, color:'#e8a21a'},
+  {name:'China & Taiwan',   rx:/\b(china|taiwan|xi jinping|beijing|hong kong|south china sea)\b/gi, color:'#e05a8a'},
+  {name:'US Politics',      rx:/\b(trump|biden|white house|congress|senate|republican|democrat|washington)\b/gi, color:'#3d8bff'},
+  {name:'Climate',          rx:/\b(climate|flood|wildfire|hurricane|earthquake|tornado|disaster|storm)\b/gi, color:'#2dbd7e'},
+  {name:'Economy',          rx:/\b(economy|inflation|recession|fed|interest rate|gdp|market|stock|oil|trade tariff)\b/gi, color:'#9b6dff'},
+  {name:'Tech & AI',        rx:/\b(ai|artificial intelligence|chatgpt|openai|tech|cyber|hack|data breach|silicon valley)\b/gi, color:'#1eb8a8'},
+  {name:'Health',           rx:/\b(health|covid|vaccine|pandemic|disease|outbreak|who|hospital|virus)\b/gi, color:'#ff6b50'},
+];
+
+const HIGH_KW = ['breaking','urgent','alert','emergency','explosion','shooting','attack','killed','dead','flash','kills','bombed','strike'];
+const MED_KW  = ['developing','crisis','arrested','charged','protest','earthquake','hurricane','strike','conflict','war','violence'];
+const REGION_COLORS = ['#3d8bff','#2dbd7e','#e8a21a','#e05a8a','#9b6dff','#e8412a','#1eb8a8','#ff6b50'];
+
+let allArticles = [], activeFilter = 'all', topicChart = null, regionChart = null, feedStatuses = {};
+
+function getUrgency(t) {
+  const l = t.toLowerCase();
+  if (HIGH_KW.some(k => l.includes(k))) return 'high';
+  if (MED_KW.some(k => l.includes(k))) return 'medium';
+  return 'low';
+}
+
+function getTopics(t) {
+  return TOPICS.filter(tp => { tp.rx.lastIndex=0; return tp.rx.test(t); }).map(tp => tp.name);
+}
+
+function timeAgo(d) {
+  if (!d) return '';
+  const diff = Math.floor((Date.now() - new Date(d)) / 1000);
+  if (isNaN(diff) || diff < 0) return '';
+  if (diff < 60) return diff + 's ago';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return Math.floor(diff/86400) + 'd ago';
+}
+
+async function fetchFeed(feed) {
+  for (const proxyFn of PROXIES) {
+    try {
+      const res = await fetch(proxyFn(feed.url), {signal: AbortSignal.timeout(12000)});
+      if (!res.ok) continue;
+      const json = await res.json();
+      const xmlText = json.contents || json.body || '';
+      if (!xmlText) continue;
+      const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+      const items = Array.from(doc.querySelectorAll('item')).slice(0, 12);
+      if (!items.length) continue;
+      return items.map(item => {
+        const g = sel => (item.querySelector(sel)?.textContent || '').trim();
+        const title = g('title');
+        const desc = g('description').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#[0-9]+;/g,'').trim();
+        const link = g('link') || item.querySelector('link')?.getAttribute('href') || '';
+        const pubDate = g('pubDate') || g('dc\\:date') || '';
+        return {title, desc, link, pubDate, source: feed.source, region: feed.region};
+      }).filter(a => a.title);
+    } catch(e) { continue; }
+  }
+  return [];
+}
+
+async function loadNews() {
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('refresh-btn').disabled = true;
+  document.getElementById('ai-btn').disabled = true;
+  document.getElementById('ai-brief-box').style.display = 'none';
+  document.getElementById('alert-bar').style.display = 'none';
+
+  const msgs = [
+    'Scanning 9 global newsrooms...',
+    'Fetching live RSS feeds...',
+    'Detecting breaking stories...',
+    'Building intelligence dashboard...'
+  ];
+  let mi = 0;
+  const msgEl = document.getElementById('loading-msg');
+  const iv = setInterval(() => { mi=(mi+1)%msgs.length; msgEl.textContent=msgs[mi]; }, 1000);
+
+  feedStatuses = {};
+  const results = await Promise.allSettled(FEEDS.map(f => fetchFeed(f)));
+  const raw = [];
+  let successCount = 0;
+
+  results.forEach((r, i) => {
+    const f = FEEDS[i];
+    if (r.status === 'fulfilled' && r.value.length > 0) {
+      feedStatuses[f.source] = 'ok';
+      raw.push(...r.value);
+      successCount++;
+    } else {
+      feedStatuses[f.source] = 'err';
+    }
+  });
+
+  clearInterval(iv);
+
+  const errEl = document.getElementById('error-bar');
+  if (successCount === 0) {
+    errEl.style.display = 'block';
+    errEl.textContent = '⚠ All feeds failed to load. Check your internet connection and try refreshing.';
+  } else if (successCount < FEEDS.length / 2) {
+    errEl.style.display = 'block';
+    errEl.textContent = `⚠ Only ${successCount} of ${FEEDS.length} feeds loaded. Some sources may be blocked.`;
+  } else {
+    errEl.style.display = 'none';
+  }
+
+  // Deduplicate
+  const seen = new Set();
+  allArticles = raw.filter(a => {
+    const k = a.title.slice(0,50).toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  }).map(a => {
+    const full = a.title + ' ' + a.desc;
+    return { ...a, urgency: getUrgency(full), topics: getTopics(full) };
+  }).sort((a, b) => {
+    const o = {high:0, medium:1, low:2};
+    if (o[a.urgency] !== o[b.urgency]) return o[a.urgency] - o[b.urgency];
+    return new Date(b.pubDate) - new Date(a.pubDate);
+  });
+
+  // Alert banner
+  const breaking = allArticles.filter(a => a.urgency === 'high');
+  if (breaking.length) {
+    const bar = document.getElementById('alert-bar');
+    document.getElementById('alert-text').textContent =
+      `${breaking.length} breaking stor${breaking.length>1?'ies':'y'} detected — ${breaking[0].title.slice(0,100)}${breaking[0].title.length>100?'…':''}`;
+    bar.style.display = 'flex';
+  }
+
+  renderStats();
+  renderSources();
+  buildCharts();
+  renderFilters();
+  renderNews();
+
+  document.getElementById('updated-time').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('main').style.display = 'block';
+  document.getElementById('refresh-btn').disabled = false;
+  document.getElementById('ai-btn').disabled = false;
+}
+
+function renderStats() {
+  const high = allArticles.filter(a => a.urgency==='high').length;
+  const med  = allArticles.filter(a => a.urgency==='medium').length;
+  const ok   = Object.values(feedStatuses).filter(v=>v==='ok').length;
+  const regs = new Set(allArticles.map(a=>a.region)).size;
+  const stats = [
+    {label:'Total stories', val: allArticles.length, color: ''},
+    {label:'Breaking',      val: high,               color: '#e8412a'},
+    {label:'Developing',    val: med,                color: '#e8a21a'},
+    {label:'Sources live',  val: `${ok}/${FEEDS.length}`, color: '#2dbd7e'},
+    {label:'Regions',       val: regs,               color: '#3d8bff'},
+  ];
+  document.getElementById('stats-grid').innerHTML = stats.map(s =>
+    `<div class="stat-card">
+      <div class="stat-label">${s.label}</div>
+      <div class="stat-val" style="${s.color?'color:'+s.color:''}">${s.val}</div>
+    </div>`
+  ).join('');
+}
+
+function renderSources() {
+  document.getElementById('source-row').innerHTML = FEEDS.map(f => {
+    const ok = feedStatuses[f.source]==='ok';
+    return `<span class="src-pill ${ok?'src-ok':'src-err'}">
+      <span class="src-dot" style="background:${ok?'#2dbd7e':'#e8412a'}"></span>${f.source}
+    </span>`;
+  }).join('');
+}
+
+function buildCharts() {
+  const topicMap = {}, regionMap = {};
+  allArticles.forEach(a => {
+    a.topics.forEach(t => { topicMap[t] = (topicMap[t]||0)+1; });
+    regionMap[a.region] = (regionMap[a.region]||0)+1;
+  });
+  const topicData = Object.entries(topicMap).sort((a,b)=>b[1]-a[1]);
+  const regionData = Object.entries(regionMap).sort((a,b)=>b[1]-a[1]);
+
+  // Legends
+  document.getElementById('topic-legend').innerHTML = topicData.map(([name,count]) => {
+    const col = TOPICS.find(t=>t.name===name)?.color||'#888';
+    return `<span class="legend-item"><span class="legend-dot" style="background:${col}"></span>${name} <b style="color:#fff">${count}</b></span>`;
+  }).join('');
+
+  document.getElementById('region-legend').innerHTML = regionData.map(([name,count],i) =>
+    `<span class="legend-item"><span class="legend-dot" style="background:${REGION_COLORS[i%REGION_COLORS.length]}"></span>${name} <b style="color:#fff">${count}</b></span>`
+  ).join('');
+
+  // Topic chart height
+  const tH = Math.max(220, topicData.length * 38 + 60);
+  document.getElementById('topic-wrap').style.height = tH + 'px';
+  const rH = Math.max(220, regionData.length * 38 + 60);
+  document.getElementById('region-wrap').style.height = rH + 'px';
+
+  const gridCol = 'rgba(255,255,255,0.06)';
+  const tickCol = '#666';
+
+  if (topicChart) topicChart.destroy();
+  topicChart = new Chart(document.getElementById('topicChart'), {
+    type: 'bar',
+    data: {
+      labels: topicData.map(d=>d[0]),
+      datasets: [{
+        label: 'Headlines',
+        data: topicData.map(d=>d[1]),
+        backgroundColor: topicData.map(d=>(TOPICS.find(t=>t.name===d[0])?.color||'#888')+'bb'),
+        borderColor:     topicData.map(d=> TOPICS.find(t=>t.name===d[0])?.color||'#888'),
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.raw} headline${ctx.raw!==1?'s':''}`}} },
+      scales:{
+        x:{ticks:{color:tickCol,font:{size:11,family:'IBM Plex Mono, monospace'}},grid:{color:gridCol},border:{display:false}},
+        y:{ticks:{color:'#ccc',font:{size:12,family:'Playfair Display, serif'}},grid:{display:false},border:{display:false}}
+      }
+    }
+  });
+
+  if (regionChart) regionChart.destroy();
+  regionChart = new Chart(document.getElementById('regionChart'), {
+    type: 'bar',
+    data: {
+      labels: regionData.map(d=>d[0]),
+      datasets: [{
+        label: 'Stories',
+        data: regionData.map(d=>d[1]),
+        backgroundColor: regionData.map((_,i)=>REGION_COLORS[i%REGION_COLORS.length]+'bb'),
+        borderColor:     regionData.map((_,i)=>REGION_COLORS[i%REGION_COLORS.length]),
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.raw} stor${ctx.raw!==1?'ies':'y'}`}} },
+      scales:{
+        x:{ticks:{color:tickCol,font:{size:11,family:'IBM Plex Mono, monospace'}},grid:{color:gridCol},border:{display:false}},
+        y:{ticks:{color:'#ccc',font:{size:12,family:'Playfair Display, serif'}},grid:{display:false},border:{display:false}}
+      }
+    }
+  });
+}
+
+function renderFilters() {
+  const topicNames = [...new Set(allArticles.flatMap(a=>a.topics))].slice(0,5);
+  const btns = [
+    {key:'all',    label:'All stories'},
+    {key:'high',   label:'● Breaking'},
+    {key:'medium', label:'● Developing'},
+    {key:'low',    label:'● Standard'},
+    ...topicNames.map(t=>({key:t,label:t}))
+  ];
+  document.getElementById('filter-row').innerHTML = btns.map(b =>
+    `<button class="filter-btn ${activeFilter===b.key?'active':''}" onclick="setFilter('${b.key.replace(/'/g,"\\'")}')">
+      ${b.label}
+    </button>`
+  ).join('');
+}
+
+function setFilter(f) {
+  activeFilter = f;
+  renderFilters();
+  renderNews();
+}
+
+function renderNews() {
+  const filtered = activeFilter==='all' ? allArticles
+    : allArticles.filter(a => a.urgency===activeFilter || a.topics.includes(activeFilter));
+
+  document.getElementById('news-count').textContent =
+    `Showing ${filtered.length} stor${filtered.length!==1?'ies':'y'}`;
+
+  if (!filtered.length) {
+    document.getElementById('news-list').innerHTML =
+      `<div class="empty">No stories match this filter.</div>`;
+    return;
+  }
+
+  document.getElementById('news-list').innerHTML = filtered.slice(0,80).map(a => {
+    const bLabel = a.urgency==='high'?'BREAKING':a.urgency==='medium'?'DEVELOPING':'NEWS';
+    const border = a.urgency==='high'?'#e8412a':a.urgency==='medium'?'#e8a21a':'#3d8bff';
+    const ta = timeAgo(a.pubDate);
+    const pills = a.topics.map(t => {
+      const col = TOPICS.find(tp=>tp.name===t)?.color||'#888';
+      return `<span class="topic-pill" style="background:${col}22;color:${col};border-color:${col}55"
+        onclick="setFilter('${t.replace(/'/g,"\\'")}'">${t}</span>`;
+    }).join('');
+    const safeLink = a.link ? `href="${a.link.replace(/"/g,'&quot;')}" target="_blank" rel="noopener noreferrer"` : '';
+    return `<div class="news-item" style="border-left:3px solid ${border}">
+      <div class="news-left">
+        <span class="news-badge badge-${a.urgency}">${bLabel}</span>
+      </div>
+      <div class="news-right">
+        <a class="news-title" ${safeLink}>${a.title || '(No title)'}</a>
+        ${a.desc ? `<p class="news-desc">${a.desc.slice(0,240)}</p>` : ''}
+        <div class="news-meta">
+          <span class="news-source">${a.source}</span>
+          ${ta ? `<span>·</span><span>${ta}</span>` : ''}
+          <span>·</span>
+          <span>${a.region}</span>
+          ${pills}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function getAIBrief() {
+  const btn = document.getElementById('ai-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Analyzing...';
+  const top = allArticles.slice(0,25).map(a=>`[${a.urgency.toUpperCase()}] ${a.source}: ${a.title}`).join('\n');
+  const topTopics = [...new Set(allArticles.flatMap(a=>a.topics))].slice(0,6).join(', ');
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514', max_tokens:1000,
+        system:'You are a sharp global news analyst. Given live breaking headlines, write a punchy 3-4 sentence intelligence brief: what is the dominant story, which regions are in focus, and what should readers watch. End with exactly one specific thing to monitor in the next 24 hours. Be factual and direct.',
+        messages:[{role:'user',content:`Top headlines right now:\n${top}\n\nTrending topics: ${topTopics}\n\nWrite the intelligence brief.`}]
+      })
+    });
+    const d = await res.json();
+    const text = d.content?.[0]?.text || 'Analysis unavailable.';
+    document.getElementById('ai-brief-text').textContent = text;
+    document.getElementById('ai-brief-box').style.display = 'block';
+  } catch {
+    document.getElementById('ai-brief-text').textContent = 'Analysis unavailable — API error.';
+    document.getElementById('ai-brief-box').style.display = 'block';
+  }
+  btn.disabled = false;
+  btn.textContent = '⚡ AI Brief';
+}
+
+// Boot
+loadNews();
+</script>
+</body>
+</html>
